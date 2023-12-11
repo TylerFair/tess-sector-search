@@ -25,6 +25,9 @@ class PBSScript:
         self.orbit = orbit
         self.path = os.path.expanduser(path)
         self.common_header = self.create_common_header()
+        self.download_url = f"https://archive.stsci.edu/hlsps/tica/s{self.sector}/cam{{cam}}-ccd{{ccd}}/hlsp_tica_tess_ffi_s{self.sector:04d}-o{{orbit_binary}}-00[{{start_cadence}}-{{end_cadence}}]-cam{{cam}}-ccd{{ccd}}_tess_v01_img.fits"
+        self.output_pattern = "{self.path}/S{self.sector}/orbit-{self.orbit}/tica/cam{{cam}}-ccd{{ccd}}/hlsp_tica_tess_ffi_s{self.sector:04d}-o{{orbit_binary}}-00#1-cam{{cam}}-ccd{{ccd}}_tess_v01_img.fits"
+
 
     def create_common_header(self, user_email="default@usq.edu.au"):
         """
@@ -70,7 +73,7 @@ class PBSScript:
             f.write("module load curl/7.80.0-gcc-6vy\n")
             for cam in range(1, 5):
                     for ccd in range(1, 5):
-                        f.write("curl --proxy http://webproxy.usq.edu.au:8080 -f --parallel --parallel-max 10 --create-dirs --output '{self.path}/S%d/orbit-%d-tica/cam%d-ccd%d/hlsp_tica_tess_ffi_s%.4d-o%d-00#1-cam%d-ccd%d_tess_v01_img.fits' https://archive.stsci.edu/hlsps/tica/s%.4d/cam%d-ccd%d/hlsp_tica_tess_ffi_s%.4d-o%d-00[%d-%d]-cam%d-ccd%d_tess_v01_img.fits 2>&1 | tee curl.log\n" % (int(self.sector),int(self.orbit),cam,ccd,int(self.sector),orbit_binary,cam,ccd,int(self.sector),cam,ccd,int(self.sector),orbit_binary,int(start_cadence),int(end_cadence),cam,ccd))
+                        f.write(f"curl --proxy http://webproxy.usq.edu.au:8080 -f --parallel --parallel-max 10 --create-dirs --output '{self.output_pattern.format(cam=cam, ccd=ccd, orbit_binary=orbit_binary)}' '{self.download_url.format(cam=cam, ccd=ccd, orbit_binary=orbit_binary, start_cadence=start_cadence, end_cadence=end_cadence)}' 2>&1 | tee curl.log\n")
         try:
             subprocess.run(['dos2unix', output_file_path], check=True)
         except subprocess.CalledProcessError as e:
