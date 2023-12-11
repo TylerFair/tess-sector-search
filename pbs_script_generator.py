@@ -36,7 +36,7 @@ class PBSScript:
         with open(file_path, 'w') as file:
             file.write(content)
             
-    def create_common_header(self, user_email="default@usq.edu.au"):
+    def create_common_header(self, user_email="tyler.fairnington@usq.edu.au"):
         """
         Creates a common header for PBS scripts.
 
