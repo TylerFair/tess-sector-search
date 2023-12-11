@@ -1,5 +1,5 @@
 import os
-import argparse
+import argparses
 from datetime import datetime
 import pandas as pd
 import requests
@@ -133,7 +133,7 @@ class SectorSetup:
             config_file_path = os.path.join(run_path, "example-lc-cam%d.cfg" % cam)
             with open(config_file_path, "w") as file:
                 file.write("[IOSettings]\n")
-                file.write("indir = /home/u1133872/%s/\n" % os.path.join(self.path, "orbit-%d" % self.orbit))
+                file.write("indir = %s/\n" % os.path.join(self.path, "orbit-%d" % self.orbit))
                 file.write("orbit_id = %d\n" % self.orbit)
                 file.write("cadence_type = 10\n")
                 file.write("sector = %d\n" % self.sector)
@@ -182,7 +182,7 @@ class SectorSetup:
         config_file_path = os.path.join(run_path, "example-ffi.cfg")
         with open(config_file_path, "w") as file:
             file.write("[Setup]\n")
-            file.write("indir= /home/u1133872/%s/ffi/\n" % os.path.join(self.path, "orbit-%d" % self.orbit))
+            file.write("indir= %s/ffi/\n" % os.path.join(self.path, "orbit-%d" % self.orbit))
             file.write("orbit_id = %d\n" % self.orbit)
             file.write("cadence_type = 10\n")
             file.write("cadence_limit = %d, %d\n" % (start_cadence, end_cadence))
@@ -284,7 +284,7 @@ class PBSRun:
     """
     def __init__(self, pbs_script):
         """
-        Initializes the TESSScriptExecutor with a PBSScript instance.
+        Initializes the PBSRun with a PBSScript instance.
 
         Parameters:
             pbs_script (PBSScript): An instance of the PBSScript class.
@@ -326,7 +326,7 @@ def main():
     parser.add_argument("sector", type=int, help="Sector number")
     parser.add_argument("orbit", type=int, help="Orbit ID number")
     parser.add_argument("--path", default="30daytemp/", help="Base path for the directories. Default is '30daytemp/'")
-    parser.add_argument("--catalog", action='store_true', help="Generate catalogs. Default is False.")
+    parser.add_argument("--catalog", action='store_true', help="Generate catalogs.")
     parser.add_argument("--download", action='store_true', help='Run Download PBS Script')
     parser.add_argument("--photometry", action='store_true', help='Run photometry PBS Script')
     parser.add_argument("--lc", action='store_true', help='Run light curve PBS Script')
