@@ -1,41 +1,65 @@
-This code builds off of the public QLP FFI code by C. X. Huang.
+TESS Sector Search and Analysis Tools
 
-tess_sector_search.py can be used to find the start and end cadences of each orbit in a sector, save and use the spacecraft and camera pointings and create directories for a sector search.
-It can also generate catalogs for all stars in a given cam/ccd image. 
+This project provides a suite of tools for analyzing TESS (Transiting Exoplanet Survey Satellite) sectors, handling the extraction of cadences, spacecraft and camera pointings, directory creation for sector searches, and catalog generation. It also includes functionality to generate and execute PBS scripts for high-performance computing (HPC) environments.
 
-pbs_script_generator.py is a module invoked in tess_sector_search.py and can be used to generate PBS scripts for HPC use, as well as executing the same scripts. 
+Modules
 
-### Example Usage ###
-if executing on shell through main: 
-python tess_sector_search.py <sector> <orbit> <--path=default> <--catalog=False> <--download=False> <--photometry=False> <--lc=False>
+tess_sector_search.py: Main script for sector analysis, including cadence handling, pointing information retrieval, directory setup, and catalog creation.
+pbs_script_generator.py: Module for generating and executing PBS scripts for HPC usage.
+Features
 
-else:
-tess_processor = SectorSetup(args.sector, args.orbit, args.path)
-tess_processor.catalog_required = args.catalog  # Set the flag based on the user's choice
+Determine start and end cadences for each orbit in a sector.
+Retrieve and utilize spacecraft and camera pointing data.
+Create necessary directories for a sector search.
+Generate star catalogs for specific camera/CCD images.
+Generate and execute PBS scripts for data processing on HPC systems.
+Usage
 
-    # Create all sector files
+Command-Line Execution
+Run the tess_sector_search.py script with the desired sector and orbit numbers. Optional arguments include specifying a path, generating catalogs, and controlling the execution of download, photometry, and light curve scripts.
+
+shell
+Copy code
+python tess_sector_search.py <sector> <orbit> [--path=default] [--catalog=False] [--download=False] [--photometry=False] [--lc=False]
+Module Import
+The script can also be used as a module, allowing the execution of specific functions as needed.
+
+python
+Copy code
+from tess_sector_search import SectorSetup, PBSRun
+
+# Initialize the SectorSetup with desired parameters
+tess_processor = SectorSetup(sector, orbit, path)
+tess_processor.catalog_required = catalog
+
+# Create all necessary files for the sector
 tess_processor.create_sector_files()
 
-    # Generate PBS Scripts
+# Generate PBS scripts for data processing
 tess_processor.generate_pbs_scripts()
-    # Initialize PBSRun with the created PBSScript instance
+
+# Initialize PBSRun with the created PBSScript instance
 pbs_run = PBSRun(tess_processor.pbs_script)
 
-    # Count the number of scripts to run
-scripts_to_run = sum([args.download, args.photometry, args.lc])
-
-if args.download:
+# Execute specific scripts
+if download:
     pbs_run.download()
-    if scripts_to_run > 1:
-        print("Waiting 6 hours before running the next script")
-        time.sleep(21600)  # 6 hours
+    # Additional logic for timing between script executions...
 
-if args.photometry:
+if photometry:
     pbs_run.photometry()
-        # Check if light curve script is also scheduled to run
-    if args.lc:
-        print("Waiting 12 hours before running the light curve script")
-        time.sleep(43200)  # 12 hours
+    # Additional logic for timing between script executions...
 
-if args.lc:
+if lc:
     pbs_run.lc()
+Dependencies
+
+Python 3.x
+Requests
+Pandas
+Subprocess
+Ensure all dependencies are installed to use the scripts effectively.
+
+Authors
+
+Tyler R. Fairnington, building off of public QLP by Chelsea X. Huang. 
