@@ -12,10 +12,6 @@ This project provides a suite of tools for analyzing TESS (Transiting Exoplanet 
 
 - tess_sector_search.py: Main script for sector analysis, including cadence handling, pointing information retrieval, directory setup, and catalog creation.
 - pbs_script_generator.py: Module for generating and executing PBS scripts for HPC usage.
-Features
-
-
-
 
 # Usage
 
