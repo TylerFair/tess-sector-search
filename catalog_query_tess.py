@@ -1,3 +1,21 @@
+#!/usr/bin/env python
+# 
+# Copyright (C) 2017 - Massachusetts Institute of Technology (MIT) 
+# 
+# This program is free software: you can redistribute it and/or modify 
+# it under the terms of the GNU General Public License as published by 
+# the Free Software Foundation, either version 3 of the License, or 
+# (at your option) any later version. 
+# 
+# This program is distributed in the hope that it will be useful, 
+# but WITHOUT ANY WARRANTY; without even the implied warranty of 
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the 
+# GNU General Public License for more details. 
+# 
+# You should have received a copy of the GNU General Public License 
+# along with this program.  If not, see <http://www.gnu.org/licenses/>. 
+
+
 
 import optparse
 import logging
@@ -16,8 +34,12 @@ from astropy.time import Time
 from astroquery.vizier import Vizier
 import astroquery
 from urllib.error import URLError
-from astroquery.mast import Catalogs
+from astroquery.exceptions import RemoteServiceError
+import time
 
+#from astroquery.mast import Conf 
+#Conf.timeout = 3600
+from astroquery.mast import Catalogs
 DIR = os.path.abspath(os.path.dirname(__file__))
 sys.path.insert(0, os.path.join(DIR, '..'))
 
@@ -36,12 +58,13 @@ def cmd_parse():
     p.add_option('--pointings', help='the pointing file that corresponding to the four cameras')
     p.add_option('-O', '--outdir', help='The output directory for the catalog files')
     p.add_option('--debug', action='store_true', help='output debug level message')
-    p.add_option('--maglim', default=12, help='the magnitude limit of the catalog')
+    p.add_option('--maglim', default=13.5, help='the magnitude limit of the catalog')
     p.add_option('--width', default=0.3, help='the radius of the region to query')
     p.add_option('--orbitid', help='the orbitid of the catalogfile')
     p.add_option('--cadence', help='cadence number of one of the images (preferably start cadence')
-    p.add_option('--numsquares', default=4, help='the number of subsquares to break the catalog image into')
+    p.add_option('--numsquares', help='the number of subsquares to break the catalog image into')
     p.add_option('--sector', help='sector number')
+    p.add_option('--path', default='30daytemp', help='The path to the orbit directory')
     options, arguments = p.parse_args()
     
     return [options, arguments]
@@ -140,125 +163,147 @@ class Catalog(object):
                                   "query method %s" % self.method) 
         return
     
-def process_catalogs(sector, orbit, numsquares, base_path):
+def downloadfits(sector, orbit, cadence):
     """
-    Processes catalogs for a given sector orbit.
-
-    Args:
-        sector (int): TESS sector number.
-        orbit (int): TESS orbit number.
-        numsquares (int): Number of subsquares per CCD.
-        base_path (str): Base path for data storage.
-
-    Returns:
-        str: Error messages, if any.
+    Function that generates fits files for each cam and ccd
+    input:
+        sector = sector number
+        orbit = orbit number 
+        cadence = cadence that is in the files (preferably start cadence)
+    output:
+        all tica files for one cadence of each cam/ccd combination under catalogs_data/cam{cam}-ccd{ccd}.fits
     """
-    downloadfits(sector, orbit, numsquares, base_path)
-    all_pointing_info = get_subsquare_centers_and_radius(numsquares, orbit, base_path)
+    if orbit % 2 == 0:
+        orbit = 2
+    else: 
+        orbit = 1
+        
+    url_pattern = 'https://mast.stsci.edu/api/v0.1/Download/file/?uri=mast:HLSP/tica/s00%d/cam{cam}-ccd{ccd}/hlsp_tica_tess_ffi_s00%d-o%d-00%d-cam{cam}-ccd{ccd}_tess_v01_img.fits'% (sector, sector, orbit, cadence)
 
-    error_messages = ''
+
+    #if not os.path.exists('catalogs_data'):
+    #    os.makedirs('catalogs_data')
+
+
     for cam in range(1, 5):
         for ccd in range(1, 5):
-            ccd_catalog, error_messages = process_cam_ccd(cam, ccd, all_pointing_info, orbit, base_path, error_messages)
-    return error_messages
-
-def process_cam_ccd(cam, ccd, all_pointing_info, orbit, base_path, error_messages):
+            url = url_pattern.format(cam=cam, ccd=ccd)
+            output_file = f'{path}/orbit-%d/ffi/run/cam{cam}-ccd{ccd}.fits'%(orbitid)
+            try:
+                urllib.request.urlretrieve(url, output_file)
+            except URLError as e:
+                print(f'Error downloading {url}: {e}')
+    return
+ 
+def get_subsquare_centers_and_radius(num_squares):
     """
-    Processes a single camera and CCD.
-
-    Args:
-        cam (int): Camera number.
-        ccd (int): CCD number.
-        all_pointing_info (dict): Pointing information.
-        orbit (int): TESS orbit number.
-        base_path (str): Base path for data storage.
-        error_messages (str): Accumulated error messages.
-
-    Returns:
-        tuple: CCD catalog dataframe and updated error messages.
+    Function that generates the subsquare info for all cam/ccd combinations in a given directory
+    input:
+        num_squares = the number of sub-squares you want to create
+    output:
+        all_pointing_info = dictionary containing dataframes for each cam/ccd combination with center RA, DEC, and circle radius in degrees
     """
-    ccd_catalog = []
-    pointing_info = all_pointing_info[f"pointing_info_cam{cam}_ccd{ccd}"]
+    all_pointing_info = {}
+    for cam in range(1, 5):
+        for ccd in range(1, 5):
+            filename = f"{path}/orbit-%d/ffi/run/cam{cam}-ccd{ccd}.fits"%(orbitid)
+            file = fits.open(filename)
+            data = file[0].data
+            world = WCS(file[0].header)
 
-    for i, row in pointing_info.iterrows():
-        ra, dec, width = row['Center RA'], row['Center Dec'], row['Circle Radius']
-        catfile = os.path.join(base_path, f'orbit-{orbit}/ffi/run/orbit{orbit}_header_cam{cam}ccd{ccd}_subsquare{i}.txt')
-        ccd_catalog, error_messages = query_catalog(catfile, ra, dec, width, orbit, cam, ccd, i, error_messages)
+            image_shape = data.shape
+            squares = (image_shape[0] // num_squares, image_shape[1] // num_squares)
 
-    ccd_df = pd.concat(ccd_catalog, axis=0, ignore_index=False)
-    ccd_df = ccd_df.drop_duplicates()
+            subsquare_info = []
+            for i in range(num_squares):
+                for j in range(num_squares):
+                    x_min, x_max = i*squares[0], (i+1)*squares[0]
+                    y_min, y_max = j*squares[1], (j+1)*squares[1]
 
-    save_catalog(ccd_df, orbit, cam, ccd, base_path)
-    return ccd_catalog, error_messages
+                    coords = world.pixel_to_world_values([x_min, x_max], [y_min, y_max])
+                    center_ra, center_dec = np.median(coords[0]), np.median(coords[1])
 
-def query_catalog(catfile, ra, dec, width, orbit, cam, ccd, subsquare_index, error_messages):
-    """
-    Queries catalog for a given subsquare.
+                    x_sep_deg = np.abs(world.pixel_to_world(x_min, y_min).separation(world.pixel_to_world(x_max, y_min)).deg)
+                    y_sep_deg = np.abs(world.pixel_to_world(x_min, y_min).separation(world.pixel_to_world(x_min, y_max)).deg)
 
-    Args:
-        catfile (str): Catalog file path.
-        ra (float): Right ascension.
-        dec (float): Declination.
-        width (float): Width of the search area.
-        orbit (int): TESS orbit number.
-        cam (int): Camera number.
-        ccd (int): CCD number.
-        subsquare_index (int): Index of the subsquare.
-        error_messages (str): Accumulated error messages.
+                    square_cross_deg = np.sqrt(x_sep_deg**2 + y_sep_deg**2)
+                    circle_radius = 0.5 * square_cross_deg * 1.2
 
-    Returns:
-        tuple: Subsquare catalog dataframe and updated error messages.
-    """
-    retry_count = 1
-    cat = Catalog(catfile, ra, dec, width, colid=1, colra=2, coldec=3, colmag=4, colx=5, coly=6, ra0=ra, dec0=dec, method="TIC", maglim=args.maglim)
-    for attempt in range(retry_count + 1):
-        try:
-            cat.query()
-            subsquare_catalog = cat
-            tempdf = pd.read_csv(catfile, names=["ID", "ra", "dec", "Tmag", "pmRA", "pmDEC", "Jmag", "Hmag", "Kmag"], delimiter=',')
-            os.remove(catfile)
-            return tempdf, error_messages
-        except RemoteServiceError as e:
-            if attempt < retry_count:
-                print(f"Error occurred: {e}. Retrying once for subsquare {subsquare_index} of cam{cam}-ccd{ccd}...")
-                time.sleep(5)
-            else:
-                error_messages += f"No stars found in subsquare {subsquare_index} of cam{cam}-ccd{ccd}: {e}\n"
-    return None, error_messages
+                    subsquare_info.append({'Center RA': center_ra, 'Center Dec': center_dec, 'Circle Radius': circle_radius})
 
-def save_catalog(ccd_df, orbit, cam, ccd, base_path):
-    """
-    Saves the catalog dataframes to files.
+            df_name = f"pointing_info_cam{cam}_ccd{ccd}"
+            all_pointing_info[df_name] = pd.DataFrame(subsquare_info)
+    return all_pointing_info
 
-    Args:
-        ccd_df (DataFrame): The CCD catalog dataframe.
-        orbit (int): TESS orbit number.
-        cam (int): Camera number.
-        ccd (int): CCD number.
-        base_path (str): Base path for data storage.
-    """
-    bright_df = ccd_df[ccd_df['Tmag'] <= 10]
-    bright_df.to_csv(os.path.join(base_path, f'orbit-{orbit}/ffi/run/catalog_{orbit}_{cam}_{ccd}_bright.txt'), header=False, index=False, sep=' ', na_rep='')
+def process_sector():
+    error_messages = ''
 
-    full_df = ccd_df[ccd_df['Tmag'] <= 12]
-    full_df.to_csv(os.path.join(base_path, f'orbit-{orbit}/ffi/run/catalog_{orbit}_{cam}_{ccd}_full.txt'), header=False, index=False, sep=' ', na_rep='')
+    for cam in range(1, 5):
+        for ccd in range(1, 5):
+            ccd_catalog = []
 
-def main():
-    parser = argparse.ArgumentParser(description="Generate catalogs for TESS data.")
-    parser.add_argument("--sector", type=int, required=True, help="TESS sector number.")
-    parser.add_argument("--orbit", type=int, required=True, help="TESS orbit number.")
-    parser.add_argument("--cadence", type=int, required=True, help="Start cadence number.")
-    parser.add_argument("--numsquares", type=int, default=4, help="Number of subsquares per CCD.")
-    parser.add_argument("--path", type=str, default="30daytemp", help="Base path for data storage.")
+            pointing_info = all_pointing_info["pointing_info_cam%d_ccd%d" % (cam, ccd)]
 
-    args = parser.parse_args()
-    base_path = os.path.expanduser(f'~/{args.path}')
+            for i, row in pointing_info.iterrows():
+                ra = row['Center RA']
+                dec = row['Center Dec']
+                width = row['Circle Radius']
+                catfile = "{path}/orbit-%d/ffi/run/orbit%d_header_cam%dccd%d_subsquare%d.txt" % (orbitid, orbitid, cam, ccd, i)
 
-    if not os.path.exists(base_path):
-        os.makedirs(base_path, exist_ok=True)
+                cat = Catalog(catfile, ra, dec, width, colid=1, colra=2, coldec=3, colmag=4, colx=5, coly=6, ra0=ra, dec0=dec, method="TIC", maglim=maglim)
 
-    error_messages = process_catalogs(args.sector, args.orbit, args.numsquares, base_path)
-    print(error_messages, end='')
+                retry_count = 1
+                for attempt in range(retry_count + 1):
+                    try:
+                        cat.query()
+                        subsquare_catalog = cat
+                        tempdf = pd.read_csv(catfile, names=["ID", "ra", "dec", "Tmag", "pmRA", "pmDEC", "Jmag", "Hmag", "Kmag"], delimiter=',')
+                        ccd_catalog.append(tempdf)
+                        break
+                    except RemoteServiceError as e:
+                        if attempt < retry_count:
+                            print(f"Error occurred: {e}. Retrying once for subsquare {i} of cam{cam}-ccd{ccd}...")
+                            time.sleep(5)
+                        else:
+                            error_messages += f"No stars found in subsquare {i} of cam{cam}-ccd{ccd}: {e}\n"
+
+            ccd_df = pd.concat(ccd_catalog, axis=0, ignore_index=False)
+            ccd_df = ccd_df.drop_duplicates()
+
+            #ccd_df.to_csv('30daytemp/orbit-%d/ffi/run/orbit%d_header_cam%dccd%d.csv'% (orbitid, orbitid, cam, ccd), header=False, index=False, sep=' ', na_rep='nan')
+
+            bright_df = ccd_df[ccd_df['Tmag'] <= 10]
+            bright_df.to_csv('{path}/orbit-%d/ffi/run/catalog_%d_%d_%d_bright.txt' % (orbitid, orbitid, cam, ccd), header=False, index=False, sep=' ', na_rep='')
+
+            full_df = ccd_df[ccd_df['Tmag'] <= 12]
+            full_df.to_csv('{path}/orbit-%d/ffi/run/catalog_%d_%d_%d_full.txt' % (orbitid, orbitid, cam, ccd), header=False, index=False, sep=' ', na_rep='')
+
+            os.remove(catfile) # removes subsquare files 
+
+
 
 if __name__ == '__main__':
-    main()
+    options, args = cmd_parse()
+    if options.logfile:
+        logging.basicConfig(level=logging.DEBUG, filename=options.logfile, filemode='w', format='%(asctime)s - %(levelname)s - %(message)s')
+    patools.setup_logging(debug=options.debug, filename=options.logfile, multi=False)
+    logger = logging.getLogger(__name__)
+
+    pointings = options.pointings
+    out_dir = options.outdir
+    path = options.path
+
+    maglim = float(options.maglim)
+    orbitid = int(options.orbitid)
+    numsquares = int(options.numsquares)
+    cadence = int(options.cadence)
+    sector = int(options.sector)
+  
+    
+    downloadfits(sector, orbitid, cadence)
+    all_pointing_info = get_subsquare_centers_and_radius(numsquares)
+    process_sector()
+ 
+
+    print(error_messages, end='')
+    

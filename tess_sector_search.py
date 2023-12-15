@@ -1,5 +1,5 @@
 import os
-import argparses
+import argparse
 from datetime import datetime
 import pandas as pd
 import requests
@@ -229,16 +229,9 @@ class SectorSetup:
         # Assuming start_cadence is obtained from get_cadence_limits
         start_cadence, _ = self.get_cadence_limits()
 
-        subprocess.run(['python', 'catalog_query_tess.py', 
-                        '--logfile', log_file, 
-                        '--pointings', f"S{self.sector}.csv", 
-                        '--orbitid', str(self.orbit), 
-                        '--cadence', str(start_cadence), 
-                        '--path', str(self.path),
-                        '--numsquares', '4', 
-                        '--sector', str(self.sector)], 
-                        check=True)     
-
+        #subprocess.run(['python', 'catalog_query_tess.py', '--logfile', log_file, '--pointings', f"S{self.sector}.csv", '--orbitid', str(self.orbit), '--cadence', str(start_cadence), '--path', '.','--numsquares', '4', '--sector', str(self.sector)], check=True)     
+        subprocess.run(['python', 'catalog_query_tess.py', '--logfile', log_file, '--pointings', f"S{self.sector}.csv", '--orbitid', str(self.orbit), '--cadence', str(start_cadence),'--numsquares', '4', '--sector', str(self.sector), '--path', str(self.path), '--maglim', 12], check=True)
+   
     def create_sector_files(self):
         """
         Creates necessary files and directories for TESS sector processing.
