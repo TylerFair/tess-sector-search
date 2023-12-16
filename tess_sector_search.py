@@ -129,11 +129,13 @@ class SectorSetup:
         Parameters:
             run_path (str): The directory path where the LC configuration files will be created.
         """
+        indir_path = os.path.abspath(os.path.join(self.path, f"orbit-{self.orbit}/")) + '/'
+
         for cam in range(1, 5):
             config_file_path = os.path.join(run_path, "example-lc-cam%d.cfg" % cam)
             with open(config_file_path, "w") as file:
                 file.write("[IOSettings]\n")
-                file.write("indir = %s\n" % os.path.abspath(os.path.join(self.path, f"orbit-{self.orbit}/")))
+                file.write(f"indir = {indir_path}\n")
                 file.write("orbit_id = %d\n" % self.orbit)
                 file.write("cadence_type = 10\n")
                 file.write("sector = %d\n" % self.sector)
@@ -174,6 +176,8 @@ class SectorSetup:
         os.makedirs(ffi_path, exist_ok=True)
         run_path = os.path.join(ffi_path, "run")
         os.makedirs(run_path, exist_ok=True)
+        indir_path = os.path.abspath(os.path.join(self.path, f"orbit-{self.orbit}/ffi")) + '/'
+
         # Create directories for each camera and CCD
         for cam in range(1, 5):
             for ccd in range(1, 5):
@@ -184,7 +188,7 @@ class SectorSetup:
         config_file_path = os.path.join(run_path, "example-ffi.cfg")
         with open(config_file_path, "w") as file:
             file.write("[Setup]\n")
-            file.write("indir= %s\n" % os.path.abspath(os.path.join(self.path, f"orbit-{self.orbit}/ffi/")))
+            file.write(f"indir= {indir_path}\n")
             file.write("orbit_id = %d\n" % self.orbit)
             file.write("cadence_type = 10\n")
             file.write("cadence_limit = %d, %d\n" % (start_cadence, end_cadence))
