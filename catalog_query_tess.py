@@ -163,122 +163,129 @@ class Catalog(object):
                                   "query method %s" % self.method) 
         return
     
-def downloadfits(sector, orbit, cadence):
-    """
-    Function that generates fits files for each cam and ccd
-    input:
-        sector = sector number
-        orbit = orbit number 
-        cadence = cadence that is in the files (preferably start cadence)
-    output:
-        all tica files for one cadence of each cam/ccd combination under catalogs_data/cam{cam}-ccd{ccd}.fits
-    """
-    if orbit % 2 == 0:
-        orbit = 2
-    else: 
-        orbit = 1
-        
-    url_pattern = 'https://mast.stsci.edu/api/v0.1/Download/file/?uri=mast:HLSP/tica/s00%d/cam{cam}-ccd{ccd}/hlsp_tica_tess_ffi_s00%d-o%d-00%d-cam{cam}-ccd{ccd}_tess_v01_img.fits'% (sector, sector, orbit, cadence)
+class FitsDownloader:
+    def __init__(self, sector, orbitid, cadence, path):
+        self.sector = sector
+        self.orbit = orbit
+        self.cadence = cadence
+        self.path = path
+        self.orbitid = orbitid
+        self.orbit = 2 if self.orbitid % 2 == 0 else 1
+        self.url_pattern = f'https://mast.stsci.edu/api/v0.1/Download/file/?uri=mast:HLSP/tica/s00{sector}/cam{{cam}}-ccd{{ccd}}/hlsp_tica_tess_ffi_s00{sector}-o{orbit}-00{cadence}-cam{{cam}}-ccd{{ccd}}_tess_v01_img.fits'
 
+    def download_fits(self):
+        for cam in range(1, 5):
+            for ccd in range(1, 5):
+                self._download_single_fits(cam, ccd)
 
-    #if not os.path.exists('catalogs_data'):
-    #    os.makedirs('catalogs_data')
-
-
-    for cam in range(1, 5):
-        for ccd in range(1, 5):
-            url = url_pattern.format(cam=cam, ccd=ccd)
-            output_file = f'{path}/orbit-%d/ffi/run/cam{cam}-ccd{ccd}.fits'%(orbitid)
-            try:
-                urllib.request.urlretrieve(url, output_file)
-            except URLError as e:
-                print(f'Error downloading {url}: {e}')
-    return
+    def _download_single_fits(self, cam, ccd):
+        url = self.url_pattern.format(cam=cam, ccd=ccd)
+        output_file = f'{self.path}/orbit-{self.orbitid}/ffi/run/cam{cam}-ccd{ccd}.fits'
+        try:
+            urllib.request.urlretrieve(url, output_file)
+        except URLError as e:
+            logging.error(f'Error downloading {url}: {e}')
  
-def get_subsquare_centers_and_radius(num_squares):
-    """
-    Function that generates the subsquare info for all cam/ccd combinations in a given directory
-    input:
-        num_squares = the number of sub-squares you want to create
-    output:
-        all_pointing_info = dictionary containing dataframes for each cam/ccd combination with center RA, DEC, and circle radius in degrees
-    """
-    all_pointing_info = {}
-    for cam in range(1, 5):
-        for ccd in range(1, 5):
-            filename = f"{path}/orbit-%d/ffi/run/cam{cam}-ccd{ccd}.fits"%(orbitid)
-            file = fits.open(filename)
-            data = file[0].data
-            world = WCS(file[0].header)
+class SubsquareInfoGenerator:
+    def __init__(self, num_squares, path, orbitid):
+        self.num_squares = num_squares
+        self.path = path
+        self.orbitid = orbitid
 
-            image_shape = data.shape
-            squares = (image_shape[0] // num_squares, image_shape[1] // num_squares)
+    def get_subsquare_centers_and_radius(self):
+        all_pointing_info = {}
+        for cam in range(1, 5):
+            for ccd in range(1, 5):
+                filename = f"{self.path}/orbit-{self.orbitid}/ffi/run/cam{cam}-ccd{ccd}.fits"
+                with fits.open(filename) as file:
+                    data = file[0].data
+                    world = WCS(file[0].header)
 
-            subsquare_info = []
-            for i in range(num_squares):
-                for j in range(num_squares):
-                    x_min, x_max = i*squares[0], (i+1)*squares[0]
-                    y_min, y_max = j*squares[1], (j+1)*squares[1]
+                subsquare_info = self._calculate_subsquare_info(data, world)
+                df_name = f"pointing_info_cam{cam}_ccd{ccd}"
+                all_pointing_info[df_name] = pd.DataFrame(subsquare_info)
+        return all_pointing_info
 
-                    coords = world.pixel_to_world_values([x_min, x_max], [y_min, y_max])
-                    center_ra, center_dec = np.median(coords[0]), np.median(coords[1])
+    def _calculate_subsquare_info(self, data, world):
+        image_shape = data.shape
+        squares = (image_shape[0] // self.num_squares, image_shape[1] // self.num_squares)
 
-                    x_sep_deg = np.abs(world.pixel_to_world(x_min, y_min).separation(world.pixel_to_world(x_max, y_min)).deg)
-                    y_sep_deg = np.abs(world.pixel_to_world(x_min, y_min).separation(world.pixel_to_world(x_min, y_max)).deg)
+        subsquare_info = []
+        for i in range(self.num_squares):
+            for j in range(self.num_squares):
+                x_min, x_max = i*squares[0], (i+1)*squares[0]
+                y_min, y_max = j*squares[1], (j+1)*squares[1]
 
-                    square_cross_deg = np.sqrt(x_sep_deg**2 + y_sep_deg**2)
-                    circle_radius = 0.5 * square_cross_deg * 1.2
+                coords = world.pixel_to_world_values([x_min, x_max], [y_min, y_max])
+                center_ra, center_dec = np.median(coords[0]), np.median(coords[1])
 
-                    subsquare_info.append({'Center RA': center_ra, 'Center Dec': center_dec, 'Circle Radius': circle_radius})
+                x_sep_deg = np.abs(world.pixel_to_world(x_min, y_min).separation(world.pixel_to_world(x_max, y_min)).deg)
+                y_sep_deg = np.abs(world.pixel_to_world(x_min, y_min).separation(world.pixel_to_world(x_min, y_max)).deg)
 
-            df_name = f"pointing_info_cam{cam}_ccd{ccd}"
-            all_pointing_info[df_name] = pd.DataFrame(subsquare_info)
-    return all_pointing_info
+                square_cross_deg = np.sqrt(x_sep_deg**2 + y_sep_deg**2)
+                circle_radius = 0.5 * square_cross_deg * 1.2
 
-def process_sector():
-    error_messages = ''
+                subsquare_info.append({'Center RA': center_ra, 'Center Dec': center_dec, 'Circle Radius': circle_radius})
+        return subsquare_info
+    
+class SectorProcessor:
+    def __init__(self, all_pointing_info, path, orbitid, maglim):
+        self.all_pointing_info = all_pointing_info
+        self.path = path
+        self.orbitid = orbitid
+        self.maglim = maglim
 
-    for cam in range(1, 5):
-        for ccd in range(1, 5):
-            ccd_catalog = []
+    def process_sector(self):
+        error_messages = ''
 
-            pointing_info = all_pointing_info["pointing_info_cam%d_ccd%d" % (cam, ccd)]
+        for cam in range(1, 5):
+            for ccd in range(1, 5):
+                ccd_catalog, error_messages = self._process_ccd(cam, ccd, error_messages)
 
-            for i, row in pointing_info.iterrows():
-                ra = row['Center RA']
-                dec = row['Center Dec']
-                width = row['Circle Radius']
-                catfile = "{path}/orbit-%d/ffi/run/orbit%d_header_cam%dccd%d_subsquare%d.txt" % (orbitid, orbitid, cam, ccd, i)
+                ccd_df = pd.concat(ccd_catalog, axis=0, ignore_index=False)
+                ccd_df = ccd_df.drop_duplicates()
 
-                cat = Catalog(catfile, ra, dec, width, colid=1, colra=2, coldec=3, colmag=4, colx=5, coly=6, ra0=ra, dec0=dec, method="TIC", maglim=maglim)
+                bright_df = ccd_df[ccd_df['Tmag'] <= 10]
+                bright_df.to_csv(f'{self.path}/orbit-{self.orbitid}/ffi/run/catalog_{self.orbitid}_{cam}_{ccd}_bright.txt', header=False, index=False, sep=' ', na_rep='')
 
-                retry_count = 1
-                for attempt in range(retry_count + 1):
-                    try:
-                        cat.query()
-                        subsquare_catalog = cat
-                        tempdf = pd.read_csv(catfile, names=["ID", "ra", "dec", "Tmag", "pmRA", "pmDEC", "Jmag", "Hmag", "Kmag"], delimiter=',')
-                        ccd_catalog.append(tempdf)
-                        break
-                    except RemoteServiceError as e:
-                        if attempt < retry_count:
-                            print(f"Error occurred: {e}. Retrying once for subsquare {i} of cam{cam}-ccd{ccd}...")
-                            time.sleep(5)
-                        else:
-                            error_messages += f"No stars found in subsquare {i} of cam{cam}-ccd{ccd}: {e}\n"
+                full_df = ccd_df[ccd_df['Tmag'] <= 12]
+                full_df.to_csv(f'{self.path}/orbit-{self.orbitid}/ffi/run/catalog_{self.orbitid}_{cam}_{ccd}_full.txt', header=False, index=False, sep=' ', na_rep='')
 
-            ccd_df = pd.concat(ccd_catalog, axis=0, ignore_index=False)
-            ccd_df = ccd_df.drop_duplicates()
+        return error_messages
 
-            #ccd_df.to_csv('30daytemp/orbit-%d/ffi/run/orbit%d_header_cam%dccd%d.csv'% (orbitid, orbitid, cam, ccd), header=False, index=False, sep=' ', na_rep='nan')
+    def _process_ccd(self, cam, ccd, error_messages):
+        ccd_catalog = []
+        pointing_info = self.all_pointing_info[f"pointing_info_cam{cam}_ccd{ccd}"]
 
-            bright_df = ccd_df[ccd_df['Tmag'] <= 10]
-            bright_df.to_csv('{path}/orbit-%d/ffi/run/catalog_%d_%d_%d_bright.txt' % (orbitid, orbitid, cam, ccd), header=False, index=False, sep=' ', na_rep='')
+        for i, row in pointing_info.iterrows():
+            ra = row['Center RA']
+            dec = row['Center Dec']
+            width = row['Circle Radius']
+            catfile = f"{self.path}/orbit-{self.orbitid}/ffi/run/orbit{self.orbitid}_header_cam{cam}ccd{ccd}_subsquare{i}.txt"
 
-            full_df = ccd_df[ccd_df['Tmag'] <= 12]
-            full_df.to_csv('{path}/orbit-%d/ffi/run/catalog_%d_%d_%d_full.txt' % (orbitid, orbitid, cam, ccd), header=False, index=False, sep=' ', na_rep='')
+            cat = Catalog(catfile, ra, dec, width, colid=1, colra=2, coldec=3, colmag=4, colx=5, coly=6, ra0=ra, dec0=dec, method="TIC", maglim=self.maglim)
 
-            os.remove(catfile) # removes subsquare files 
+            ccd_catalog, error_messages = self._query_catalog(cat, catfile, i, cam, ccd, ccd_catalog, error_messages)
+
+            os.remove(catfile)  # removes subsquare files
+
+        return ccd_catalog, error_messages
+
+    def _query_catalog(self, cat, catfile, i, cam, ccd, ccd_catalog, error_messages):
+        retry_count = 1
+        for attempt in range(retry_count + 1):
+            try:
+                cat.query()
+                tempdf = pd.read_csv(catfile, names=["ID", "ra", "dec", "Tmag", "pmRA", "pmDEC", "Jmag", "Hmag", "Kmag"], delimiter=',')
+                ccd_catalog.append(tempdf)
+                break
+            except RemoteServiceError as e:
+                if attempt < retry_count:
+                    print(f"Error occurred: {e}. Retrying once for subsquare {i} of cam{cam}-ccd{ccd}...")
+                    time.sleep(5)
+                else:
+                    error_messages += f"No stars found in subsquare {i} of cam{cam}-ccd{ccd}: {e}\n"
+        return ccd_catalog, error_messages
 
 
 
@@ -300,10 +307,16 @@ if __name__ == '__main__':
     sector = int(options.sector)
   
     
-    downloadfits(sector, orbitid, cadence)
-    all_pointing_info = get_subsquare_centers_and_radius(numsquares)
-    process_sector()
- 
-
-    print(error_messages, end='')
+    downloader = FitsDownloader(sector, orbit, cadence, path)
+    downloader.download_fits()
     
+    generator = SubsquareInfoGenerator(numsquares, path, orbitid)
+    all_pointing_info = generator.get_subsquare_centers_and_radius()
+    
+    processor = SectorProcessor(all_pointing_info, path, orbitid, maglim)
+    error_messages = processor.process_sector() 
+
+    print(error_messages)
+
+if __name__ == "__main__":
+    main()   
