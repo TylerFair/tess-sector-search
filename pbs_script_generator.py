@@ -87,9 +87,9 @@ class PBSScript:
             f.write("module load curl/7.80.0-gcc-6vy\n")
             for cam in range(1, 5):
                     for ccd in range(1, 5):
-                        output_str = self.output_pattern.format(path=self.path, sector=self.sector, orbit=self.orbit, orbit_binary=orbit_binary, cam=cam, ccd=ccd)
+                        output_str = os.path.abspath(self.output_pattern.format(path=self.path, sector=self.sector, orbit=self.orbit, orbit_binary=orbit_binary, cam=cam, ccd=ccd))
                         download_str = self.download_url.format(sector=self.sector, orbit_binary=orbit_binary, start_cadence=start_cadence, end_cadence=end_cadence, cam=cam, ccd=ccd)
-                        f.write(f"curl --proxy http://webproxy.usq.edu.au:8080 -f --parallel --parallel-max 10 --create-dirs --output '{output_str}' '{download_str}' 2>&1 | tee curl.log\n")
+                        f.write(f"curl --proxy http://webproxy.usq.edu.au:8080 -f --parallel --parallel-max 10 --create-dirs --output '{output_str}' {download_str} 2>&1 | tee curl.log\n")
         
         self.convert_to_unix_line_endings(output_file_path)
 
@@ -106,7 +106,9 @@ class PBSScript:
         """
         output_file_name = f"runphot_S{self.sector}_o{self.orbit}.pbs"
         output_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), output_file_name)
-
+        run_path_abs = os.path.abspath(f"{self.path}/orbit-{self.orbit}/ffi/run")
+        sector_path_abs = os.path.abspath(f"{self.path}/S{self.sector}/orbit-{self.orbit}-tica")
+        
         with open(output_file_path, "w") as f:
             f.write(self.common_header)
             f.write("#PBS -N qlp_phot\n")
@@ -117,10 +119,10 @@ class PBSScript:
             f.write("export PATH=$PATH:\"/home/u8015661/FFITools-0.6.1/PATools/bin/\":\"/home/u8015661/FFITools-0.6.1/LCTools/bin/\"\n")
             f.write("export PYTHONPATH=$PYTHONPATH:\"/home/u8015661/FFITools-0.6.1/PATools/\":\"/home/u8015661/FFITools-0.6.1/LCTools/\"\n")
             f.write("export PYTHONPATH=$PYTHONPATH:\"/home/u8015661/tess-point/\"\n")
-            f.write(f"runpath=\"{self.path}/orbit-{self.orbit}/ffi/run/\"\n")
+            f.write(f"runpath=\"{run_path_abs}/\"\n")
             for cam in range(1, 5):
                 for ccd in range(1, 5):
-                    f.write(f"patools-rename-tica -c $runpath\"example-ffi.cfg\" -I \"{self.path}/S{self.sector}/orbit-{self.orbit}-tica\" -n 60 -a {cam},{ccd} --bgsub\n")
+                    f.write(f"patools-rename-tica -c $runpath\"example-ffi.cfg\" -I \"{sector_path_abs}\" -n 60 -a {cam},{ccd} --bgsub\n")
                     f.write(f"patools-readheader -c $runpath\"example-ffi.cfg\" -a {cam},{ccd} -o $runpath\"orbit{self.orbit}_header_cam{cam}ccd{ccd}.csv\"\n")
                     f.write(f"patools-mediansub -c $runpath\"example-ffi.cfg\" -n 60 -a {cam},{ccd} -q $runpath\n")
             f.write(f"patools-reduce fieldbgsub -c $runpath\"example-ffi.cfg\" -n 60 --debug\n")
@@ -141,6 +143,7 @@ class PBSScript:
         """
         output_file_name = f"runlc_S{self.sector}_o{self.orbit}.pbs"
         output_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), output_file_name)
+        run_path_abs = os.path.abspath(f"{self.path}/orbit-{self.orbit}/ffi/run")
 
         with open(output_file_path, "w") as f:
             f.write(self.common_header)
@@ -151,7 +154,7 @@ class PBSScript:
             f.write("module load python/3.9.13-gcc-jhn\n")
             f.write("export PATH=$PATH:\"/home/u8015661/FFITools-0.6.1/PATools/bin/\":\"/home/u8015661/FFITools-0.6.1/LCTools/bin/\"\n")
             f.write("export PYTHONPATH=$PYTHONPATH:\"/home/u8015661/FFITools-0.6.1/PATools/\":\"/home/u8015661/FFITools-0.6.1/LCTools/\"\n")
-            f.write(f"runpath=\"{self.path}/orbit-{self.orbit}/ffi/run/\"\n")
+            f.write(f"runpath=\"{run_path_abs}/\"\n")
             for cam in range(1, 5):
                 for ccd in range(1, 5):
                     f.write(f"lctools-phottoh5-bgsub -c $runpath\"example-lc-cam{cam}.cfg\" -n 60 --debug --logfile - -a {cam},{ccd} 2>&1 | tee logfile/lcgen.log\n")
