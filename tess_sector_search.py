@@ -133,7 +133,7 @@ class SectorSetup:
             config_file_path = os.path.join(run_path, "example-lc-cam%d.cfg" % cam)
             with open(config_file_path, "w") as file:
                 file.write("[IOSettings]\n")
-                file.write("indir = %s/\n" % os.path.join(self.path, "orbit-%d" % self.orbit))
+                file.write("indir = %s\n" % os.path.abspath(os.path.join(self.path, f"orbit-{self.orbit}")))
                 file.write("orbit_id = %d\n" % self.orbit)
                 file.write("cadence_type = 10\n")
                 file.write("sector = %d\n" % self.sector)
@@ -184,7 +184,7 @@ class SectorSetup:
         config_file_path = os.path.join(run_path, "example-ffi.cfg")
         with open(config_file_path, "w") as file:
             file.write("[Setup]\n")
-            file.write("indir= %s/ffi/\n" % os.path.join(self.path, "orbit-%d" % self.orbit))
+            file.write("indir= %s\n" % os.path.abspath(os.path.join(self.path, f"orbit-{self.orbit}/ffi")))
             file.write("orbit_id = %d\n" % self.orbit)
             file.write("cadence_type = 10\n")
             file.write("cadence_limit = %d, %d\n" % (start_cadence, end_cadence))
