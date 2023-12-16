@@ -319,7 +319,7 @@ def main():
     parser = argparse.ArgumentParser(description="Create directory structure for orbit data.")
     parser.add_argument("sector", type=int, help="Sector number")
     parser.add_argument("orbit", type=int, help="Orbit ID number")
-    parser.add_argument("--path", default="30daytemp/", help="Base path for the directories. Default is '30daytemp/'")
+    parser.add_argument("--path", default="30daytemp", help="Base path for the directories. Default is '30daytemp'")
     parser.add_argument("--catalog", action='store_true', help="Generate catalogs.")
     parser.add_argument("--download", action='store_true', help='Run Download PBS Script')
     parser.add_argument("--photometry", action='store_true', help='Run photometry PBS Script')

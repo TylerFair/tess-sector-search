@@ -27,7 +27,7 @@ class PBSScript:
         self.path = os.path.expanduser(path)
         self.common_header = self.create_common_header()
         self.download_url = "https://archive.stsci.edu/hlsps/tica/s{sector}/cam{cam}-ccd{ccd}/hlsp_tica_tess_ffi_s{sector:04d}-o{orbit_binary}-00[{start_cadence}-{end_cadence}]-cam{cam}-ccd{ccd}_tess_v01_img.fits"
-        self.output_pattern = "{path}/S{sector}/orbit-{orbit}/tica/cam{cam}-ccd{ccd}/hlsp_tica_tess_ffi_s{sector:04d}-o{orbit_binary}-00#1-cam{cam}-ccd{ccd}_tess_v01_img.fits"
+        self.output_pattern = "{path}/S{sector}/orbit-{orbit}-tica/cam{cam}-ccd{ccd}/hlsp_tica_tess_ffi_s{sector:04d}-o{orbit_binary}-00#1-cam{cam}-ccd{ccd}_tess_v01_img.fits"
 
     def convert_to_unix_line_endings(self, file_path):
         with open(file_path, 'r') as file:
