@@ -166,12 +166,11 @@ class Catalog(object):
 class FitsDownloader:
     def __init__(self, sector, orbitid, cadence, path):
         self.sector = sector
-        self.orbit = orbit
         self.cadence = cadence
         self.path = path
         self.orbitid = orbitid
         self.orbit = 2 if self.orbitid % 2 == 0 else 1
-        self.url_pattern = f'https://mast.stsci.edu/api/v0.1/Download/file/?uri=mast:HLSP/tica/s00{sector}/cam{{cam}}-ccd{{ccd}}/hlsp_tica_tess_ffi_s00{sector}-o{orbit}-00{cadence}-cam{{cam}}-ccd{{ccd}}_tess_v01_img.fits'
+        self.url_pattern = f'https://mast.stsci.edu/api/v0.1/Download/file/?uri=mast:HLSP/tica/s00{self.sector}/cam{{cam}}-ccd{{ccd}}/hlsp_tica_tess_ffi_s00{self.sector}-o{self.orbit}-00{self.cadence}-cam{{cam}}-ccd{{ccd}}_tess_v01_img.fits'
 
     def download_fits(self):
         for cam in range(1, 5):
@@ -255,6 +254,7 @@ class SectorProcessor:
 
     def _process_ccd(self, cam, ccd, error_messages):
         ccd_catalog = []
+        catfiles_to_remove = []  # List to store catfile paths
         pointing_info = self.all_pointing_info[f"pointing_info_cam{cam}_ccd{ccd}"]
 
         for i, row in pointing_info.iterrows():
@@ -262,14 +262,17 @@ class SectorProcessor:
             dec = row['Center Dec']
             width = row['Circle Radius']
             catfile = f"{self.path}/orbit-{self.orbitid}/ffi/run/orbit{self.orbitid}_header_cam{cam}ccd{ccd}_subsquare{i}.txt"
+            catfiles_to_remove.append(catfile)  # Add catfile path to the list
 
             cat = Catalog(catfile, ra, dec, width, colid=1, colra=2, coldec=3, colmag=4, colx=5, coly=6, ra0=ra, dec0=dec, method="TIC", maglim=self.maglim)
-
             ccd_catalog, error_messages = self._query_catalog(cat, catfile, i, cam, ccd, ccd_catalog, error_messages)
 
-            os.remove(catfile)  # removes subsquare files
+        # Remove subsquare files after all have been processed
+        for catfile in catfiles_to_remove:
+            os.remove(catfile)
 
         return ccd_catalog, error_messages
+
 
     def _query_catalog(self, cat, catfile, i, cam, ccd, ccd_catalog, error_messages):
         retry_count = 1
