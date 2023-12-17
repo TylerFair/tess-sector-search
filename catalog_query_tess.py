@@ -296,8 +296,8 @@ if __name__ == '__main__':
     patools.setup_logging(debug=options.debug, filename=options.logfile, multi=False)
     logger = logging.getLogger(__name__)
 
-    pointings = options.pointings
-    out_dir = options.outdir
+    #pointings = options.pointings
+    #out_dir = options.outdir
     path = options.path
 
     maglim = float(options.maglim)
@@ -307,7 +307,7 @@ if __name__ == '__main__':
     sector = int(options.sector)
   
     
-    downloader = FitsDownloader(sector, orbit, cadence, path)
+    downloader = FitsDownloader(sector, orbitid, cadence, path)
     downloader.download_fits()
     
     generator = SubsquareInfoGenerator(numsquares, path, orbitid)
